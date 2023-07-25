@@ -16,12 +16,17 @@ enum RawTile {
 
 interface FallingState {
   isFalling(): boolean;
-  moveHorizontal(tile: Tile, dx: number):void;
+  moveHorizontal(tile: Tile, dx: number):void
+  drop(tile: Tile, x: number, y: number):void
 }
 
 class Falling {
   isFalling() { return true }
   moveHorizontal(tile: Tile, dx: number) {
+  }
+  drop(tile: Tile, x: number, y: number) {
+    map[y + 1][x] = tile
+    map[y][x] = new Air()
   }
 }
 
@@ -35,14 +40,17 @@ class Resting {
       moveToTile(playerx + dx, playery)
     }
   }
+  drop(tile: Tile, x: number, y: number) { }
 }
 
 class FallStrategy {
   constructor(private falling: FallingState) { }
-  getFalling() { return this.falling }
+  moveHorizontal(tile: Tile, dx: number) {
+    this.falling.moveHorizontal(tile, dx)
+  }
   update(tile: Tile, x: number, y: number) {
-    this.falling = map[y + 1][x].isAir() ? new Falling() : new Resting()
-    this.drop(tile, x, y)
+    this.falling = map[y + 1][x].getBlockOnTopState()
+    this.falling.drop(tile, x, y)
   }
   private drop(tile: Tile, x: number, y: number) {
     if (this.falling.isFalling()) {
@@ -60,6 +68,7 @@ interface Tile {
   moveHorizontal(dx: number): void;
   moveVertical(dy: number): void;
   update(x:number, y:number): void;
+  getBlockOnTopState(): FallingState
 }
 
 class Flux implements Tile {
@@ -77,6 +86,9 @@ class Flux implements Tile {
     g.fillStyle = '#ccffcc'
     g.fillRect(x * TILE_SIZE, y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class Unbreakable implements Tile {
@@ -90,6 +102,9 @@ class Unbreakable implements Tile {
   moveHorizontal(dx: number) { }
   moveVertical(dy: number) { }
   update(x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class Stone implements Tile {
@@ -103,9 +118,11 @@ class Stone implements Tile {
   update(x: number, y: number) {
     this.fallStrategy.update(this, x, y)
   }
-
+  getBlockOnTopState(): FallingState {
+      return new Resting()
+  }
   moveHorizontal(dx: number) {
-    this.fallStrategy.getFalling().moveHorizontal(this, dx)
+    this.fallStrategy.moveHorizontal(this, dx)
   }
   moveVertical(dy: number) { }
   draw(g: CanvasRenderingContext2D, x: number, y: number) {
@@ -126,6 +143,9 @@ class Air implements Tile {
   }
   draw(g: CanvasRenderingContext2D, x: number, y: number) { }
   update(x: number, y: number) { }
+  getBlockOnTopState() {
+    return new Falling()
+  }
 }
 
 class Player implements Tile {
@@ -136,6 +156,9 @@ class Player implements Tile {
   moveVertical(dy: number) { }
   update(x: number, y: number) { }
   draw(g: CanvasRenderingContext2D, x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class Box implements Tile {
@@ -147,7 +170,7 @@ class Box implements Tile {
   isLock1(){return false}
   isLock2(){return false}
   moveHorizontal(dx: number) {
-    this.fallStrategy.getFalling().moveHorizontal(this, dx)
+    this.fallStrategy.moveHorizontal(this, dx)
   }
   moveVertical(dy: number) { }
   draw(g: CanvasRenderingContext2D, x: number, y: number) {
@@ -156,6 +179,9 @@ class Box implements Tile {
   }
   update(x: number, y: number) {
     this.fallStrategy.update(this, x, y)
+  }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
   }
 }
 
@@ -167,18 +193,21 @@ class Key implements Tile {
   isLock1(){return false}
   isLock2(){return false}
   moveHorizontal(dx: number) {
-    remove(this.keyConf.getRemoveStrategy())
+    this.keyConf.removeLock()
     moveToTile(playerx + dx, playery);
   }
   moveVertical(dy: number) {
-    remove(this.keyConf.getRemoveStrategy())
+    this.keyConf.removeLock()
     moveToTile(playerx, playery + dy)
   }
   draw(g: CanvasRenderingContext2D, x: number, y: number) {
-    g.fillStyle = this.keyConf.getColor()
+    this.keyConf.setColor(g)
     g.fillRect(x * TILE_SIZE,y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
   update(x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class KeyConfiguration {
@@ -187,10 +216,13 @@ class KeyConfiguration {
       private _1: boolean,
       private removeStrategy: RemoveStrategy
   ) { }
-  getColor() { return this.color}
+  setColor(g: CanvasRenderingContext2D) {
+    g.fillStyle = this.color
+  }
   is1() { return this._1}
-  getRemoveStrategy() {
-    return this.removeStrategy
+
+  removeLock() {
+    remove(this.removeStrategy)
   }
 }
 
@@ -213,6 +245,9 @@ class Key1 implements Tile {
     g.fillRect(x * TILE_SIZE,y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
   update(x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class Key2 implements Tile {
@@ -234,6 +269,9 @@ class Key2 implements Tile {
     g.fillRect(x * TILE_SIZE,y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
   update(x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 class LockClass implements Tile {
@@ -246,10 +284,13 @@ class LockClass implements Tile {
   moveHorizontal(dx: number) {}
   moveVertical(dy: number) {}
   draw(g: CanvasRenderingContext2D, x: number, y: number) {
-    g.fillStyle = this.keyConf.getColor()  //'#ffcc00'
+    this.keyConf.setColor(g)  //'#ffcc00'
     g.fillRect(x * TILE_SIZE,y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
   update(x: number, y: number) {
+  }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
   }
 }
 
@@ -264,6 +305,9 @@ class Lock1 implements Tile {
     g.fillRect(x * TILE_SIZE,y* TILE_SIZE, TILE_SIZE, TILE_SIZE);
   }
   update(x: number, y: number) {
+  }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
   }
 }
 
@@ -285,6 +329,9 @@ class Lock2 implements Tile {
     );
   }
   update(x: number, y: number) { }
+  getBlockOnTopState(): FallingState {
+    return new Resting()
+  }
 }
 
 enum RawInput {
